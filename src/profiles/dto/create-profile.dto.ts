@@ -12,39 +12,41 @@ import {
 import { BODY_TYPES, GENDERS } from "../../constants";
 
 export class CreateProfileDto {
-  @IsString()
-  @MinLength(5)
-  @MaxLength(80)
+  @IsString({ message: "El título es obligatorio" })
+  @MinLength(5, { message: "Mínimo 5 caracteres" })
+  @MaxLength(80, { message: "Máximo 80 caracteres" })
   title: string;
 
-  @IsString()
-  @MinLength(2)
-  @MaxLength(40)
+  @IsString({ message: "El apodo es obligatorio" })
+  @MinLength(2, { message: "Mínimo 2 caracteres" })
+  @MaxLength(40, { message: "Máximo 40 caracteres" })
   nickname: string;
 
-  @IsString()
-  @MinLength(20)
-  @MaxLength(2000)
+  @IsString({ message: "La descripción es obligatoria" })
+  @MinLength(20, {
+    message: "Cuéntanos un poco más sobre ti (mín. 20 caracteres)",
+  })
+  @MaxLength(2000, { message: "Máximo 2000 caracteres" })
   bio: string;
 
   @Type(() => Number)
-  @IsInt()
-  @Min(18)
-  @Max(99)
+  @IsInt({ message: "Edad no válida" })
+  @Min(18, { message: "Debes ser mayor de 18 años" })
+  @Max(99, { message: "Edad no válida" })
   age: number;
 
-  @IsIn(GENDERS as unknown as string[])
+  @IsIn(GENDERS as unknown as string[], { message: "Selecciona una opción" })
   gender: string;
 
-  @IsString()
+  @IsString({ message: "Selecciona un país" })
   countryCode: string;
 
-  @IsString()
+  @IsString({ message: "Selecciona una ciudad" })
   citySlug: string;
 
   @IsOptional()
   @Transform(({ value }) => (value === "" ? undefined : value))
-  @IsIn(BODY_TYPES as unknown as string[])
+  @IsIn(BODY_TYPES as unknown as string[], { message: "Complexión no válida" })
   bodyType?: string;
 
   @IsOptional()

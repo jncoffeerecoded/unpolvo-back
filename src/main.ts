@@ -1,6 +1,7 @@
 import { NestFactory } from "@nestjs/core";
-import { ValidationPipe } from "@nestjs/common";
+import { BadRequestException, ValidationPipe } from "@nestjs/common";
 import { AppModule } from "./app.module";
+import { AllExceptionsFilter } from "./common/all-exceptions.filter";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -12,8 +13,28 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Todos los errores salen como JSON { error, fieldErrors? }.
+  app.useGlobalFilters(new AllExceptionsFilter());
+
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, transform: true }),
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      // La validación devuelve { error, fieldErrors } (mismo shape que el front).
+      exceptionFactory: (errors) => {
+        const fieldErrors: Record<string, string> = {};
+        for (const e of errors) {
+          const msg = e.constraints
+            ? Object.values(e.constraints)[0]
+            : undefined;
+          if (msg && !fieldErrors[e.property]) fieldErrors[e.property] = msg;
+        }
+        return new BadRequestException({
+          error: "Revisa los campos marcados.",
+          fieldErrors,
+        });
+      },
+    }),
   );
 
   const port = Number(process.env.PORT ?? 3008);
