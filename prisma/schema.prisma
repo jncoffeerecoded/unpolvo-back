@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Country {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  name      String
+  locale    String
+  cities    City[]
+  profiles  Profile[]
+  createdAt DateTime  @default(now())
+}
+
+model City {
+  id        String    @id @default(cuid())
+  slug      String
+  name      String
+  countryId String
+  country   Country   @relation(fields: [countryId], references: [id])
+  profiles  Profile[]
+  createdAt DateTime  @default(now())
+
+  @@unique([countryId, slug])
+}
+
+model Profile {
+  id       String @id @default(cuid())
+  slug     String @unique
+  title    String
+  nickname String
+  bio      String
+
+  age    Int
+  gender String
+
+  countryId String
+  country   Country @relation(fields: [countryId], references: [id])
+  cityId    String
+  city      City    @relation(fields: [cityId], references: [id])
+
+  bodyType String?
+
+  photos Photo[]
+
+  status        String    @default("pending")
+  featuredUntil DateTime?
+
+  commentsCount Int @default(0)
+  likesCount    Int @default(0)
+  ratingSum     Int @default(0)
+  ratingCount   Int @default(0)
+
+  isVerified Boolean   @default(false)
+  verifiedAt DateTime?
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  comments      Comment[]
+  ratings       Rating[]
+  likes         Like[]
+  notifications Notification[]
+  reports       Report[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([countryId, cityId, status])
+  @@index([status, featuredUntil])
+}
+
+model Photo {
+  id        String  @id @default(cuid())
+  url       String
+  alt       String?
+  order     Int     @default(0)
+  isPrimary Boolean @default(false)
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  body      String
+  profileId String
+  profile   Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+  createdAt DateTime  @default(now())
+
+  @@index([profileId])
+  @@index([parentId])
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  value     Int
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([profileId, userId])
+}
+
+model Like {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([profileId, userId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("NotifRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?    @relation("NotifActor", fields: [actorId], references: [id], onDelete: SetNull)
+  profileId String?
+  profile   Profile? @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  type      String
+  body      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  isVerified    Boolean   @default(false)
+  profiles      Profile[]
+  accounts      Account[]
+  sessions      Session[]
+
+  comments           Comment[]
+  ratings            Rating[]
+  likes              Like[]
+  notifications      Notification[] @relation("NotifRecipient")
+  actedNotifications Notification[] @relation("NotifActor")
+
+  createdAt DateTime @default(now())
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model Report {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  reason    String
+  details   String?
+  createdAt DateTime @default(now())
+}
