@@ -14,6 +14,17 @@ type UploadedImage = { buffer: Buffer; mimetype: string; size: number };
 const isFeatured = (d: Date | null) => !!d && d.getTime() > Date.now();
 const avg = (sum: number, count: number) => (count > 0 ? sum / count : 0);
 
+// Compone la URL pública absoluta de una foto. En BD guardamos la ruta relativa
+// (/img/...); aquí le anteponemos el dominio del backend para que el front la
+// sirva tal cual. Si ya es absoluta (datos antiguos) se devuelve sin tocar.
+function publicUrl(stored: string | null | undefined): string | null {
+  if (!stored) return null;
+  if (/^https?:\/\//i.test(stored)) return stored;
+  const base = (process.env.PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "");
+  const path = stored.startsWith("/") ? stored : `/img/${stored}`;
+  return base ? `${base}${path}` : path;
+}
+
 const CARD_INCLUDE = {
   photos: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }], take: 1 },
   city: true,
@@ -48,7 +59,7 @@ function toCard(p: CardRow) {
     bodyType: p.bodyType,
     isVerified: p.isVerified,
     featured: isFeatured(p.featuredUntil),
-    photoUrl: p.photos[0]?.url ?? null,
+    photoUrl: publicUrl(p.photos[0]?.url),
     countryCode: p.country.code,
     citySlug: p.city.slug,
     cityName: p.city.name,
@@ -124,7 +135,7 @@ export class ProfilesService {
       bodyType: p.bodyType,
       isVerified: p.isVerified,
       featured: isFeatured(p.featuredUntil),
-      photoUrl: p.photos[0]?.url ?? null,
+      photoUrl: publicUrl(p.photos[0]?.url),
       countryCode: p.country.code,
       countryName: p.country.name,
       citySlug: p.city.slug,
@@ -134,7 +145,7 @@ export class ProfilesService {
       ratingCount: p.ratingCount,
       ratingAvg: avg(p.ratingSum, p.ratingCount),
       bio: p.bio,
-      photos: p.photos.map((ph) => ({ url: ph.url, alt: ph.alt })),
+      photos: p.photos.map((ph) => ({ url: publicUrl(ph.url) ?? ph.url, alt: ph.alt })),
       comments: p.comments.map((c) => ({
         id: c.id,
         body: c.body,
@@ -230,7 +241,7 @@ export class ProfilesService {
       status: p.status,
       featured: isFeatured(p.featuredUntil),
       isVerified: p.isVerified,
-      photoUrl: p.photos[0]?.url ?? null,
+      photoUrl: publicUrl(p.photos[0]?.url),
       countryCode: p.country.code,
       citySlug: p.city.slug,
       cityName: p.city.name,

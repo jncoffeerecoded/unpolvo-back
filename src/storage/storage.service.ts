@@ -32,7 +32,8 @@ export class StorageService {
     return ACCEPTED_IMAGE_TYPES.includes(mime);
   }
 
-  // Comprime a WebP y sube. Devuelve la URL servida por este backend (/img/...).
+  // Comprime a WebP y sube. Devuelve la ruta relativa servida por este backend
+  // (/img/...). La URL absoluta se compone al leer (ver publicUrl en profiles).
   async upload(buffer: Buffer): Promise<string> {
     const webp = await sharp(buffer)
       .rotate()
@@ -49,8 +50,7 @@ export class StorageService {
         CacheControl: "public, max-age=31536000, immutable",
       }),
     );
-    const base = (process.env.PUBLIC_BACKEND_URL ?? "").replace(/\/$/, "");
-    return base ? `${base}/img/${key}` : `/img/${key}`;
+    return `/img/${key}`;
   }
 
   async getObject(key: string) {
