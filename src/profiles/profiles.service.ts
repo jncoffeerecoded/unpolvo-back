@@ -25,6 +25,12 @@ function publicUrl(stored: string | null | undefined): string | null {
   return base ? `${base}${path}` : path;
 }
 
+function excerpt(bio: string | null | undefined, max = 160): string {
+  const text = (bio ?? "").replace(/\s+/g, " ").trim();
+  if (text.length <= max) return text;
+  return text.slice(0, max).replace(/\s+\S*$/, "") + "…";
+}
+
 const CARD_INCLUDE = {
   photos: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }], take: 1 },
   city: true,
@@ -35,6 +41,7 @@ type CardRow = {
   slug: string;
   title: string;
   nickname: string;
+  bio: string;
   age: number;
   gender: string;
   bodyType: string | null;
@@ -54,6 +61,7 @@ function toCard(p: CardRow) {
     slug: p.slug,
     title: p.title,
     nickname: p.nickname,
+    excerpt: excerpt(p.bio),
     age: p.age,
     gender: p.gender,
     bodyType: p.bodyType,
