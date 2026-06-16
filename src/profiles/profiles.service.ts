@@ -25,7 +25,7 @@ function publicUrl(stored: string | null | undefined): string | null {
   return base ? `${base}${path}` : path;
 }
 
-function excerpt(bio: string | null | undefined, max = 160): string {
+function excerpt(bio: string | null | undefined, max = 1000): string {
   const text = (bio ?? "").replace(/\s+/g, " ").trim();
   if (text.length <= max) return text;
   return text.slice(0, max).replace(/\s+\S*$/, "") + "…";
