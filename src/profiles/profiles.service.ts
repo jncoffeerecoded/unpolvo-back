@@ -153,6 +153,9 @@ export class ProfilesService {
       ratingCount: p.ratingCount,
       ratingAvg: avg(p.ratingSum, p.ratingCount),
       bio: p.bio,
+      contactEmail: p.contactEmail,
+      contactPhone: p.contactPhone,
+      contactWhatsapp: p.contactWhatsapp,
       photos: p.photos.map((ph) => ({ url: publicUrl(ph.url) ?? ph.url, alt: ph.alt })),
       comments: p.comments.map((c) => ({
         id: c.id,
@@ -205,6 +208,12 @@ export class ProfilesService {
     const photoUrls: string[] = [];
     for (const f of valid) photoUrls.push(await this.storage.upload(f.buffer));
 
+    // WhatsApp: guardamos solo dígitos (con código de país) para componer
+    // el enlace wa.me. El + y los separadores se descartan.
+    const whatsapp = dto.contactWhatsapp
+      ? dto.contactWhatsapp.replace(/[^0-9]/g, "")
+      : null;
+
     const slug = uniqueSlug(`${dto.nickname}-${city.slug}`);
     await this.prisma.profile.create({
       data: {
@@ -218,6 +227,9 @@ export class ProfilesService {
         countryId: city.countryId,
         cityId: city.id,
         bodyType: dto.bodyType ?? null,
+        contactEmail: dto.contactEmail ?? null,
+        contactPhone: dto.contactPhone ?? null,
+        contactWhatsapp: whatsapp,
         status: "active",
         featuredUntil: dto.featured
           ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)

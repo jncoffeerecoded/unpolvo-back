@@ -46,6 +46,11 @@ model Profile {
 
   bodyType String?
 
+  // Métodos de contacto que el autor decide mostrar en el anuncio.
+  contactEmail    String?
+  contactPhone    String? // formato internacional, ej. +34600111222
+  contactWhatsapp String? // solo dígitos con código de país, ej. 34600111222
+
   photos Photo[]
 
   status        String    @default("pending")
@@ -67,6 +72,7 @@ model Profile {
   likes         Like[]
   notifications Notification[]
   reports       Report[]
+  conversations Conversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -159,7 +165,49 @@ model User {
   notifications      Notification[] @relation("NotifRecipient")
   actedNotifications Notification[] @relation("NotifActor")
 
+  conversationsAsOwner Conversation[] @relation("ConversationOwner")
+  conversationsAsGuest Conversation[] @relation("ConversationGuest")
+  sentMessages         Message[]
+
   createdAt DateTime @default(now())
+}
+
+// Conversación privada entre el visitante (guest) que inicia el contacto y el
+// autor (owner) de un anuncio. Una por (perfil, visitante).
+model Conversation {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  ownerId String
+  owner   User   @relation("ConversationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  guestId String
+  guest   User   @relation("ConversationGuest", fields: [guestId], references: [id], onDelete: Cascade)
+
+  // pending  → el autor aún no ha respondido; el visitante solo puede 1 mensaje.
+  // accepted → el autor respondió; ambos chatean sin límite.
+  status String @default("pending")
+
+  messages      Message[]
+  lastMessageAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+
+  @@unique([profileId, guestId])
+  @@index([ownerId, lastMessageAt])
+  @@index([guestId, lastMessageAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
 }
 
 model Account {

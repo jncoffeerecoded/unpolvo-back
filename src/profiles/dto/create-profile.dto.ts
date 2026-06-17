@@ -1,15 +1,20 @@
 import { Transform, Type } from "class-transformer";
 import {
+  IsEmail,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
   MinLength,
 } from "class-validator";
 import { BODY_TYPES, GENDERS } from "../../constants";
+
+const emptyToUndef = ({ value }: { value: unknown }) =>
+  value === "" || value == null ? undefined : value;
 
 export class CreateProfileDto {
   @IsString({ message: "El título es obligatorio" })
@@ -48,6 +53,27 @@ export class CreateProfileDto {
   @Transform(({ value }) => (value === "" ? undefined : value))
   @IsIn(BODY_TYPES as unknown as string[], { message: "Complexión no válida" })
   bodyType?: string;
+
+  // ─── Métodos de contacto (todos opcionales) ─────────────────────
+  @IsOptional()
+  @Transform(emptyToUndef)
+  @IsEmail({}, { message: "Correo electrónico no válido" })
+  @MaxLength(120)
+  contactEmail?: string;
+
+  @IsOptional()
+  @Transform(emptyToUndef)
+  @Matches(/^\+?[0-9\s().-]{6,20}$/, {
+    message: "Teléfono no válido (incluye el código de país, ej. +34 600 111 222)",
+  })
+  contactPhone?: string;
+
+  @IsOptional()
+  @Transform(emptyToUndef)
+  @Matches(/^\+?[0-9\s().-]{6,20}$/, {
+    message: "WhatsApp no válido (incluye el código de país, ej. +52 55 1234 5678)",
+  })
+  contactWhatsapp?: string;
 
   @IsOptional()
   @Transform(({ value }) => value === "true" || value === true)

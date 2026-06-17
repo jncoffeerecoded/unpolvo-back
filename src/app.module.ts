@@ -8,6 +8,7 @@ import { GeoModule } from "./geo/geo.module";
 import { ProfilesModule } from "./profiles/profiles.module";
 import { StorageModule } from "./storage/storage.module";
 import { SocialModule } from "./social/social.module";
+import { ChatModule } from "./chat/chat.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { VerificationModule } from "./verification/verification.module";
 import { MeModule } from "./me/me.module";
@@ -24,6 +25,7 @@ import { HealthController } from "./health.controller";
     ProfilesModule,
     StorageModule,
     SocialModule,
+    ChatModule,
     NotificationsModule,
     VerificationModule,
     MeModule,
