@@ -128,6 +128,11 @@ export class ProfilesService {
             },
           },
         },
+        plans: {
+          where: { active: true },
+          orderBy: { order: "asc" },
+          include: { _count: { select: { media: true } } },
+        },
       },
     });
     if (!p) throw new NotFoundException("Perfil no encontrado");
@@ -157,6 +162,14 @@ export class ProfilesService {
       contactPhone: p.contactPhone,
       contactWhatsapp: p.contactWhatsapp,
       photos: p.photos.map((ph) => ({ url: publicUrl(ph.url) ?? ph.url, alt: ph.alt })),
+      plans: p.plans.map((pl) => ({
+        id: pl.id,
+        name: pl.name,
+        description: pl.description,
+        price: Number(pl.price.toString()),
+        currency: pl.currency,
+        mediaCount: pl._count.media,
+      })),
       comments: p.comments.map((c) => ({
         id: c.id,
         body: c.body,
@@ -255,6 +268,7 @@ export class ProfilesService {
       include: CARD_INCLUDE,
     });
     return rows.map((p) => ({
+      id: p.id,
       slug: p.slug,
       title: p.title,
       nickname: p.nickname,

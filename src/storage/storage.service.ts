@@ -15,6 +15,20 @@ export const ACCEPTED_IMAGE_TYPES = [
   "image/avif",
 ];
 
+export const MAX_VIDEO_BYTES = 80 * 1024 * 1024;
+export const ACCEPTED_VIDEO_TYPES = ["video/mp4", "video/webm"];
+
+// Resultado de leer un objeto, con soporte de descarga parcial (Range) para vídeo.
+export type ObjectChunk = {
+  body: Buffer;
+  contentType: string;
+  contentLength: number;
+  // Cuando se pide un Range, S3 responde 206 con estos datos.
+  contentRange?: string;
+  totalLength?: number;
+  partial: boolean;
+};
+
 @Injectable()
 export class StorageService {
   private s3 = new S3Client({
@@ -32,32 +46,65 @@ export class StorageService {
     return ACCEPTED_IMAGE_TYPES.includes(mime);
   }
 
-  // Comprime a WebP y sube. Devuelve la ruta relativa servida por este backend
-  // (/img/...). La URL absoluta se compone al leer (ver publicUrl en profiles).
-  async upload(buffer: Buffer): Promise<string> {
+  isVideo(mime: string) {
+    return ACCEPTED_VIDEO_TYPES.includes(mime);
+  }
+
+  // Comprime a WebP y sube bajo el prefijo indicado. Devuelve la ruta relativa
+  // (/img/<key>) para las fotos públicas, o la clave cruda para contenido privado.
+  async uploadImage(buffer: Buffer, prefix = "profiles"): Promise<string> {
     const webp = await sharp(buffer)
       .rotate()
       .resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 80 })
       .toBuffer();
-    const key = `profiles/${randomUUID()}.webp`;
+    const key = `${prefix}/${randomUUID()}.webp`;
+    await this.put(key, webp, "image/webp");
+    return prefix === "profiles" ? `/img/${key}` : key;
+  }
+
+  // Alias del flujo público histórico (fotos de anuncio servidas por /img/...).
+  upload(buffer: Buffer): Promise<string> {
+    return this.uploadImage(buffer, "profiles");
+  }
+
+  // Sube el vídeo SIN transcodificar bajo premium/. Devuelve la clave privada.
+  async uploadVideo(buffer: Buffer, mime: string): Promise<string> {
+    const ext = mime === "video/webm" ? "webm" : "mp4";
+    const key = `premium/${randomUUID()}.${ext}`;
+    await this.put(key, buffer, mime);
+    return key;
+  }
+
+  private async put(key: string, body: Buffer, contentType: string) {
     await this.s3.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
-        Body: webp,
-        ContentType: "image/webp",
+        Body: body,
+        ContentType: contentType,
         CacheControl: "public, max-age=31536000, immutable",
       }),
     );
-    return `/img/${key}`;
   }
 
-  async getObject(key: string) {
+  // Lee un objeto. Si se pasa `range` (cabecera HTTP "bytes=...") devuelve el
+  // tramo correspondiente (206) — necesario para el streaming de vídeo.
+  async getObject(key: string, range?: string): Promise<ObjectChunk> {
     const obj = await this.s3.send(
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      new GetObjectCommand({ Bucket: this.bucket, Key: key, Range: range }),
     );
     const bytes = await obj.Body!.transformToByteArray();
-    return { body: Buffer.from(bytes), contentType: obj.ContentType ?? "image/webp" };
+    const body = Buffer.from(bytes);
+    return {
+      body,
+      contentType: obj.ContentType ?? "application/octet-stream",
+      contentLength: body.length,
+      contentRange: obj.ContentRange,
+      totalLength: obj.ContentRange
+        ? Number(obj.ContentRange.split("/")[1])
+        : body.length,
+      partial: !!obj.ContentRange,
+    };
   }
 }

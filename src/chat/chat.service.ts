@@ -5,6 +5,9 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { MAX_IMAGE_BYTES, StorageService } from "../storage/storage.service";
+
+type UploadedImage = { buffer: Buffer; mimetype: string; size: number };
 
 // Mensajería interna entre el visitante (guest) y el autor (owner) de un anuncio.
 //
@@ -15,13 +18,27 @@ import { PrismaService } from "../prisma/prisma.service";
 //     pueden chatear sin límite.
 @Injectable()
 export class ChatService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storage: StorageService,
+  ) {}
 
   private excerpt(body: string): string {
     return body.length > 120 ? body.slice(0, 120) + "…" : body;
   }
 
-  // Crea un mensaje, actualiza la conversación y notifica al destinatario.
+  // Sube las imágenes adjuntas (capturas) al bucket privado y devuelve sus claves.
+  private async uploadAttachments(files?: UploadedImage[]): Promise<string[]> {
+    const valid = (files ?? []).filter(
+      (f) => this.storage.isImage(f.mimetype) && f.size <= MAX_IMAGE_BYTES,
+    );
+    const urls: string[] = [];
+    for (const f of valid) urls.push(await this.storage.uploadImage(f.buffer, "chat"));
+    return urls;
+  }
+
+  // Crea un mensaje (con adjuntos opcionales), actualiza la conversación y
+  // notifica al destinatario.
   private async deliver(args: {
     conversationId: string;
     profileId: string;
@@ -29,13 +46,18 @@ export class ChatService {
     recipientId: string;
     body: string;
     accept: boolean;
+    attachmentUrls?: string[];
   }) {
+    const atts = args.attachmentUrls ?? [];
     const [message] = await this.prisma.$transaction([
       this.prisma.message.create({
         data: {
           conversationId: args.conversationId,
           senderId: args.senderId,
           body: args.body,
+          ...(atts.length
+            ? { attachments: { create: atts.map((url) => ({ url, type: "image" })) } }
+            : {}),
         },
       }),
       this.prisma.conversation.update({
@@ -53,7 +75,7 @@ export class ChatService {
         actorId: args.senderId,
         profileId: args.profileId,
         type: "message",
-        body: this.excerpt(args.body),
+        body: this.excerpt(args.body || (atts.length ? "📷 Imagen" : "")),
       },
     });
 
@@ -121,7 +143,22 @@ export class ChatService {
   }
 
   // Envío dentro de una conversación existente (lo usan ambas partes).
-  async sendInConversation(conversationId: string, userId: string, body: string) {
+  // Acepta texto y/o imágenes adjuntas (capturas de recaudos).
+  async sendInConversation(
+    conversationId: string,
+    userId: string,
+    body: string,
+    files?: UploadedImage[],
+  ) {
+    const text = (body ?? "").trim();
+    const attachmentUrls = await this.uploadAttachments(files);
+    if (!text && !attachmentUrls.length) {
+      throw new BadRequestException("Escribe un mensaje o adjunta una imagen.");
+    }
+    if (text.length > 2000) {
+      throw new BadRequestException("Máximo 2000 caracteres.");
+    }
+
     const conv = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
       select: { id: true, ownerId: true, guestId: true, status: true, profileId: true },
@@ -146,8 +183,9 @@ export class ChatService {
         profileId: conv.profileId,
         senderId: userId,
         recipientId: conv.guestId,
-        body,
+        body: text,
         accept: true,
+        attachmentUrls,
       });
       return { ok: true, status: "accepted" };
     }
@@ -157,8 +195,9 @@ export class ChatService {
       profileId: conv.profileId,
       senderId: userId,
       recipientId: isOwner ? conv.guestId : conv.ownerId,
-      body,
+      body: text,
       accept: false,
+      attachmentUrls,
     });
     return { ok: true, status: "accepted" };
   }
@@ -173,7 +212,11 @@ export class ChatService {
         profile: { select: { slug: true, nickname: true, title: true } },
         owner: { select: { id: true, name: true, image: true } },
         guest: { select: { id: true, name: true, image: true } },
-        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          include: { attachments: { select: { id: true } } },
+        },
         _count: {
           select: {
             messages: { where: { readAt: null, senderId: { not: userId } } },
@@ -186,6 +229,9 @@ export class ChatService {
       const isOwner = c.ownerId === userId;
       const other = isOwner ? c.guest : c.owner;
       const last = c.messages[0];
+      const lastText = last
+        ? this.excerpt(last.body || (last.attachments.length ? "📷 Imagen" : ""))
+        : null;
       return {
         id: c.id,
         status: c.status,
@@ -193,7 +239,7 @@ export class ChatService {
         profile: c.profile,
         otherName: other?.name ?? "Usuario",
         otherImage: other?.image ?? null,
-        lastMessage: last ? this.excerpt(last.body) : null,
+        lastMessage: lastText,
         lastMessageAt: c.lastMessageAt,
         unread: c._count.messages,
       };
@@ -227,6 +273,7 @@ export class ChatService {
       where: { conversationId },
       orderBy: { createdAt: "asc" },
       take: 500,
+      include: { attachments: { select: { id: true, type: true } } },
     });
 
     const other = isOwner ? conv.guest : conv.owner;
@@ -246,6 +293,7 @@ export class ChatService {
         body: m.body,
         mine: m.senderId === userId,
         createdAt: m.createdAt,
+        attachments: m.attachments.map((a) => ({ id: a.id, type: a.type })),
       })),
     };
   }

@@ -12,6 +12,7 @@ import { ChatModule } from "./chat/chat.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { VerificationModule } from "./verification/verification.module";
 import { MeModule } from "./me/me.module";
+import { SubscriptionsModule } from "./subscriptions/subscriptions.module";
 import { HealthController } from "./health.controller";
 
 @Module({
@@ -29,6 +30,7 @@ import { HealthController } from "./health.controller";
     NotificationsModule,
     VerificationModule,
     MeModule,
+    SubscriptionsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
